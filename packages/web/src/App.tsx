@@ -9,6 +9,8 @@ import { QueueDetail } from "./pages/QueueDetail";
 import { JobDetail } from "./pages/JobDetail";
 import { DeadLetterQueue } from "./pages/DeadLetterQueue";
 import { Workers } from "./pages/Workers";
+import { WorkerDetail } from "./pages/WorkerDetail";
+import { RetryPolicies } from "./pages/RetryPolicies";
 
 export default function App() {
   return (
@@ -33,6 +35,14 @@ export default function App() {
           }
         />
         <Route
+          path="/workers/:workerId"
+          element={
+            <ProtectedRoute>
+              <WorkerDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/projects/:projectId"
           element={
             <ProtectedRoute>
@@ -45,6 +55,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DeadLetterQueue />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:projectId/retry-policies"
+          element={
+            <ProtectedRoute>
+              <RetryPolicies />
             </ProtectedRoute>
           }
         />

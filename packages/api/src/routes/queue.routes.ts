@@ -8,8 +8,10 @@ import {
   listQueuesQuerySchema,
   queueIdParamsSchema,
 } from "../validation/queue.schemas";
+import { queueScopedParamsSchema } from "../validation/job.schemas";
 import { projectIdParamsSchema } from "../validation/project.schemas";
 import * as queueService from "../services/queueService";
+import * as statsService from "../services/statsService";
 import jobRoutes from "./job.routes";
 import scheduledJobRoutes from "./scheduledJob.routes";
 
@@ -81,6 +83,18 @@ router.delete(
       queueId: req.params.queueId,
     });
     res.status(204).send();
+  })
+);
+
+router.get(
+  "/:queueId/stats",
+  validate(queueScopedParamsSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const stats = await statsService.getQueueStats(getPool(), {
+      orgId: req.user!.orgId,
+      queueId: req.params.queueId,
+    });
+    res.status(200).json(stats);
   })
 );
 

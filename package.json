@@ -13,9 +13,13 @@
     "dev:api": "npm run dev --workspace=@job-scheduler/api",
     "dev:worker": "npm run dev --workspace=@job-scheduler/worker",
     "dev:scheduler": "npm run dev --workspace=@job-scheduler/scheduler",
-    "dev:web": "npm run dev --workspace=@job-scheduler/web"
+    "dev:web": "npm run dev --workspace=@job-scheduler/web",
+    "dev": "concurrently -n api,worker,scheduler,web -c blue,green,yellow,magenta \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:scheduler\" \"npm:dev:web\""
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   }
 }

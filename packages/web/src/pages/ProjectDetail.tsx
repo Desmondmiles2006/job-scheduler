@@ -95,9 +95,14 @@ export function ProjectDetail() {
           <h1 className="page-title">{project?.name}</h1>
           <p className="page-subtitle">Queues determine concurrency, priority, and retry behavior for jobs.</p>
         </div>
-        <Link to={`/projects/${projectId}/dead-letter-jobs`} className="btn">
-          Dead letter queue
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to={`/projects/${projectId}/retry-policies`} className="btn">
+            Retry policies
+          </Link>
+          <Link to={`/projects/${projectId}/dead-letter-jobs`} className="btn">
+            Dead letter queue
+          </Link>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>

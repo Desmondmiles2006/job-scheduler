@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { StatusPill } from "../components/StatusPill";
 import { api } from "../api";
@@ -37,7 +38,7 @@ export function Workers() {
       ) : (
         <div className="list">
           {workers.map((w) => (
-            <div key={w.id} className="row">
+            <Link key={w.id} to={`/workers/${w.id}`} className="row" style={{ color: "inherit" }}>
               <div>
                 <div className="row-title mono">{w.hostname}</div>
                 <div className="row-meta">
@@ -45,7 +46,7 @@ export function Workers() {
                 </div>
               </div>
               <StatusPill label={w.isOnline ? "online" : "offline"} variant={w.isOnline ? "active" : "neutral"} />
-            </div>
+            </Link>
           ))}
         </div>
       )}

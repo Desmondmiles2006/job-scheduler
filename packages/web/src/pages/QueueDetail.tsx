@@ -4,10 +4,50 @@ import { useParams, Link } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { JobStatusPill, StatusPill } from "../components/StatusPill";
 import { api } from "../api";
-import type { Queue, Job, ScheduledJob } from "../api";
+import type { Queue, Job, ScheduledJob, QueueStats } from "../api";
 import { ApiError } from "../api/client";
 
 const JOB_STATUSES = ["QUEUED", "SCHEDULED", "CLAIMED", "RUNNING", "COMPLETED", "FAILED", "DEAD_LETTER", "CANCELLED"];
+
+function StatNumber({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 24, fontWeight: 700, color, lineHeight: 1.2 }}>{value}</div>
+      <div className="row-meta">{label}</div>
+    </div>
+  );
+}
+
+function ThroughputChart({ data }: { data: { hour: string; count: number }[] }) {
+  const width = 480;
+  const height = 80;
+  const barGap = 2;
+  const max = Math.max(1, ...data.map((d) => d.count));
+  const barWidth = data.length > 0 ? width / data.length - barGap : 0;
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: "block" }}>
+      {data.map((d, i) => {
+        const barHeight = (d.count / max) * (height - 16);
+        const x = i * (barWidth + barGap);
+        const y = height - barHeight;
+        return (
+          <rect
+            key={d.hour}
+            x={x}
+            y={y}
+            width={Math.max(barWidth, 0)}
+            height={Math.max(barHeight, 0)}
+            style={{ fill: "var(--accent)" }}
+            rx={1}
+          >
+            <title>{`${new Date(d.hour).toLocaleString()}: ${d.count} completed`}</title>
+          </rect>
+        );
+      })}
+    </svg>
+  );
+}
 
 export function QueueDetail() {
   const { projectId, queueId } = useParams<{ projectId: string; queueId: string }>();
@@ -15,6 +55,7 @@ export function QueueDetail() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
+  const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,14 +72,16 @@ export function QueueDetail() {
   async function load() {
     if (!projectId || !queueId) return;
     setLoading(true);
-    const [q, jobPage, scheduled] = await Promise.all([
+    const [q, jobPage, scheduled, queueStats] = await Promise.all([
       api.getQueue(projectId, queueId),
       api.listJobs(projectId, queueId, { status: statusFilter || undefined }),
       api.listScheduledJobs(projectId, queueId),
+      api.listQueueStats(projectId, queueId),
     ]);
     setQueue(q);
     setJobs(jobPage.items);
     setScheduledJobs(scheduled.items);
+    setStats(queueStats);
     setLoading(false);
   }
 
@@ -131,6 +174,24 @@ export function QueueDetail() {
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      {stats && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="nav-section-label" style={{ marginBottom: 12 }}>
+            Queue stats
+          </div>
+          <div style={{ display: "flex", gap: 32, flexWrap: "wrap", marginBottom: 20 }}>
+            <StatNumber label="Queued" value={stats.statusCounts.QUEUED ?? 0} color="var(--text)" />
+            <StatNumber label="Running" value={stats.statusCounts.RUNNING ?? 0} color="var(--accent)" />
+            <StatNumber label="Completed" value={stats.statusCounts.COMPLETED ?? 0} color="var(--success)" />
+            <StatNumber label="Dead-lettered" value={stats.deadLetterCount} color="var(--danger)" />
+          </div>
+          <div className="row-meta" style={{ marginBottom: 8 }}>
+            Completed jobs, last 24 hours
+          </div>
+          <ThroughputChart data={stats.completedLastHours} />
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="nav-section-label" style={{ marginBottom: 12 }}>

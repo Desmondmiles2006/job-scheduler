@@ -104,6 +104,34 @@ export interface Worker {
   isOnline: boolean;
 }
 
+export interface QueueStats {
+  statusCounts: Record<string, number>;
+  deadLetterCount: number;
+  completedLastHours: { hour: string; count: number }[];
+}
+
+export interface DashboardSummary {
+  statusCounts: Record<string, number>;
+  workersOnline: number;
+  workersOffline: number;
+  completedLastHours: { hour: string; count: number }[];
+  recentDeadLetterJobs: {
+    id: string;
+    projectId: string;
+    projectName: string;
+    jobType: string;
+    failureReason: string;
+    attempts: number;
+    movedAt: string;
+  }[];
+}
+
+export interface WorkerHeartbeat {
+  id: string;
+  heartbeatAt: string;
+  currentJobId: string | null;
+}
+
 
 interface Page<T> {
   items: T[];
@@ -218,4 +246,12 @@ export const api = {
     apiFetch<{ jobId: string }>(`/projects/${projectId}/dead-letter-jobs/${dlqId}/retry`, { method: "POST" }),
 
   listWorkers: () => apiFetch<{ items: Worker[] }>("/workers"),
+
+  listWorkerHeartbeats: (workerId: string) =>
+    apiFetch<{ items: WorkerHeartbeat[] }>(`/workers/${workerId}/heartbeats`),
+
+  listQueueStats: (projectId: string, queueId: string) =>
+    apiFetch<QueueStats>(`/projects/${projectId}/queues/${queueId}/stats`),
+
+  getDashboardSummary: () => apiFetch<DashboardSummary>("/dashboard/summary"),
 };
