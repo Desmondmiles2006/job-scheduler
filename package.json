@@ -1,0 +1,21 @@
+{
+  "name": "job-scheduler",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "migrate": "npm run migrate --workspace=@job-scheduler/db",
+    "generate": "npm run generate --workspace=@job-scheduler/db",
+    "dev:api": "npm run dev --workspace=@job-scheduler/api",
+    "dev:worker": "npm run dev --workspace=@job-scheduler/worker",
+    "dev:scheduler": "npm run dev --workspace=@job-scheduler/scheduler",
+    "dev:web": "npm run dev --workspace=@job-scheduler/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
