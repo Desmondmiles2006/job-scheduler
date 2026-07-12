@@ -126,9 +126,28 @@ without a separate broker.
 
 ### Web dashboard (`packages/web`)
 
-React + Vite single-page app. Covers auth, projects, queues, job submission and
-the job explorer, recurring cron jobs, dead-letter retry, and worker fleet
-monitoring. The Vite dev server proxies `/api` to the API service on port 3000.
+React + Vite single-page app. Covers:
+
+- Auth (login/register), project and queue management, standalone retry
+  policy management.
+- Job submission (immediate, delayed, batch) and a job explorer with a
+  visual lifecycle pipeline (highlighting the job's current stage across
+  Queued → Scheduled → Claimed → Running → Completed, with the retry and
+  dead-letter branches shown) and live countdown timers - one counting down
+  to `runAt` for queued/scheduled jobs, another counting down to the
+  worker's lease expiry (`lockedUntil`) for running jobs, making the
+  heartbeat/reclaim mechanism visible rather than invisible plumbing.
+- Recurring job creation via either a "Simple" mode (a plain "every N
+  minutes/hours/days" input, converted client-side to the equivalent cron
+  expression) or an "Advanced" mode (raw cron expression) - the backend only
+  ever sees a cron string either way.
+- Dead-letter queue view with one-click retry.
+- Worker fleet monitoring, including per-worker heartbeat history.
+- A dashboard home page aggregating org-wide job status counts, worker
+  online/offline counts, a 24-hour throughput chart, and recent dead-letter
+  entries - plus the same statistics scoped to an individual queue.
+
+The Vite dev server proxies `/api` to the API service on port 3000.
 
 ## How the cron library and the Postgres queue divide responsibility
 

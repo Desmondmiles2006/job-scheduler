@@ -118,6 +118,18 @@ Pausing a queue (`isPaused: true`) stops workers from claiming its jobs.
 ### DELETE /api/projects/:projectId/queues/:queueId
 Response `204`.
 
+### GET /api/projects/:projectId/queues/:queueId/stats
+Per-queue statistics. Response `200`:
+```json
+{
+  "statusCounts": { "QUEUED": 3, "SCHEDULED": 1, "CLAIMED": 0, "RUNNING": 1, "COMPLETED": 240, "FAILED": 0, "DEAD_LETTER": 2, "CANCELLED": 0 },
+  "deadLetterCount": 2,
+  "completedLastHours": [ { "hour": "2026-07-11T13:00:00Z", "count": 12 }, ... ]
+}
+```
+`statusCounts` always includes every status (zero-filled). `completedLastHours`
+is 24 hourly buckets covering the last day.
+
 ---
 
 ## Jobs
@@ -142,7 +154,8 @@ Query: `?cursor=&limit=&status=&type=`. Paginated. `status` is one of
 `QUEUED, SCHEDULED, CLAIMED, RUNNING, COMPLETED, FAILED, DEAD_LETTER, CANCELLED`.
 
 ### GET /api/projects/:projectId/queues/:queueId/jobs/:jobId
-Response `200`: the job.
+Response `200`: the job, including `lockedUntil` (the current lease
+expiry, when claimed/running - used by the dashboard's countdown timer).
 
 ### GET /api/projects/:projectId/queues/:queueId/jobs/:jobId/executions
 Response `200`: `{ "items": [ ... ] }` — one entry per attempt, ordered by
@@ -160,7 +173,11 @@ Errors: `400` if the job is already running or finished.
 ## Scheduled (recurring cron) jobs
 
 Scoped to a queue. The API computes the initial `nextRunAt` from the cron
-expression; the scheduler process advances it thereafter.
+expression; the scheduler process advances it thereafter. The dashboard's
+scheduled-job form offers a "Simple" mode (every N minutes/hours/days,
+converted client-side to the correct cron string) and an "Advanced" mode
+(raw cron expression) - the API itself only ever receives a cron expression
+string either way.
 
 ### POST /api/projects/:projectId/queues/:queueId/scheduled-jobs
 Request:
@@ -210,7 +227,29 @@ Response `200`: `{ "items": [ { "id", "hostname", "pid", "status", "startedAt", 
 
 ### GET /api/workers/:workerId/heartbeats
 Response `200`: `{ "items": [ { "heartbeatAt", "currentJobId" }, ... ] }` — most
-recent first.
+recent first. Shown as heartbeat history on the worker detail page.
+
+---
+
+## Dashboard
+
+Org-wide summary for the dashboard home page.
+
+### GET /api/dashboard/summary
+Requires auth, scoped to the caller's organization. Response `200`:
+```json
+{
+  "statusCounts": { "QUEUED": 5, "RUNNING": 2, "COMPLETED": 1400, ... },
+  "workersOnline": 2,
+  "workersOffline": 1,
+  "completedLastHours": [ { "hour": "2026-07-11T13:00:00Z", "count": 40 }, ... ],
+  "recentDeadLetterJobs": [
+    { "id", "projectId", "projectName", "jobType", "failureReason", "attempts", "movedAt" }
+  ]
+}
+```
+Aggregates across every project in the caller's org (unlike the per-queue
+`/stats` endpoint above, which is scoped to one queue).
 
 ---
 

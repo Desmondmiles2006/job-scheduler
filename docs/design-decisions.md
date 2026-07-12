@@ -19,9 +19,6 @@ exchange for:
 - Concurrency-safe dequeuing via `SKIP LOCKED` without any external lock
   manager.
 
-For the expected scale of this system, correctness and operational simplicity
-outweigh the throughput ceiling.
-
 ## Atomic claiming via `SELECT ... FOR UPDATE SKIP LOCKED`
 
 **Decision:** Workers claim jobs with a single statement that selects candidate
@@ -65,11 +62,8 @@ fallback of a single attempt (no retries).
 
 **Decision:** Permanently failed jobs move to a dedicated `dead_letter_jobs`
 table rather than being marked with a `jobs.status = 'DEAD_LETTER'` flag alone.
-(The job row does also get a `DEAD_LETTER` status, but the durable record lives
-in the DLQ table.)
 
 **Why:**
-
 - Keeps the hot `jobs` table and its indexes lean — dead jobs are a permanent
   tail, not part of the active working set.
 - The DLQ row carries its own copy of the payload, job type, and failure
@@ -94,9 +88,8 @@ a fresh job is created from the DLQ's snapshot.
 not `LIMIT/OFFSET`.
 
 **Why:** `OFFSET` degrades linearly as the offset grows — the database must
-scan and discard all skipped rows. On a `jobs` table that can grow large, that's
-exactly the wrong performance characteristic. Keyset pagination stays fast
-regardless of how deep into the list you page.
+scan and discard all skipped rows. Keyset pagination stays fast regardless of
+how deep into the list you page.
 
 ## Soft deletes for projects
 
@@ -105,8 +98,7 @@ hard-removed; the FK from projects to organizations is `RESTRICT`.
 
 **Why:** Projects own queues, jobs, and history; a hard delete would cascade
 destruction across a lot of operational data. A soft delete hides the project
-from normal queries while preserving the underlying records, and makes deletion
-reversible/auditable.
+from normal queries while preserving the underlying records.
 
 ## Auth: JWT access tokens + rotating opaque refresh tokens
 
@@ -115,11 +107,10 @@ tokens. Refresh tokens are opaque random strings; only their SHA-256 hash is
 stored. On refresh, the used token is revoked and a new one issued (rotation).
 
 **Why:** Stateless access tokens keep the API horizontally scalable, while
-DB-backed refresh tokens remain revocable (logout actually invalidates them).
-Storing only the hash means a database leak doesn't hand out usable sessions.
-Rotation plus reuse-detection means a stolen-and-replayed refresh token is
-caught: the legitimate client already rotated it, so the replayed token shows as
-revoked and is rejected.
+DB-backed refresh tokens remain revocable. Storing only the hash means a
+database leak doesn't hand out usable sessions. Rotation plus reuse-detection
+catches a stolen-and-replayed refresh token: the legitimate client already
+rotated it, so the replayed token shows as revoked and is rejected.
 
 ## Worker fleet endpoint is not tenant-scoped
 
@@ -128,22 +119,41 @@ is not filtered by organization.
 
 **Why:** Workers are shared infrastructure — a worker process can pull jobs from
 any queue for any org depending on deployment configuration. Worker status is
-operational visibility, not tenant-owned data, so scoping it per-org would be
-misleading. If per-tenant worker pools were ever needed, that would call for a
-`worker_queue_assignments` join table rather than a column on `workers`, since
-one worker can legitimately serve multiple queues.
+operational visibility, not tenant-owned data. If per-tenant worker pools were
+ever needed, that would call for a `worker_queue_assignments` join table rather
+than a column on `workers`, since one worker can legitimately serve multiple
+queues.
 
-## Migration strategy (three migrations)
+## Migration strategy, and a real drift problem that took two fixes
 
-**Decision:** Three ordered migrations: an initial hand-authored schema, a
-Prisma-generated migration that aligns column types with Prisma Client's
-expectations, and a third that restores database-level defaults.
+**Decision:** The schema is defined in `schema.prisma` as the canonical
+reference, but the worker and scheduler use raw `pg` on the
+concurrency-critical paths — which depend on the database generating IDs
+(`gen_random_uuid()`) and `updated_at` timestamps on insert, since not every
+raw insert supplies them explicitly.
 
-**Why:** The schema is defined in `schema.prisma` as the canonical reference,
-but the worker and scheduler use raw `pg` on the concurrency-critical paths, so
-those paths depend on the database generating IDs (`gen_random_uuid()`) and
-timestamps. Prisma's generated migration expects the application to supply those
-values and therefore dropped the DB-level defaults; the third migration restores
-them. Prisma Client inserts still work (they supply their own values), so the
-setup is correct from both entry points. See the README's "Database &
-migrations" section for the full explanation.
+**What went wrong, twice:** `schema.prisma` originally declared id fields with
+`@default(uuid())` and `updatedAt` with `@updatedAt` — both of which Prisma
+treats as *application-level* defaults (Prisma Client generates the value
+before sending the query), not database-level ones. Every time
+`prisma migrate dev` ran, Prisma compared its own understanding of the schema
+against the live database, saw the database's `DEFAULT gen_random_uuid()` /
+`DEFAULT now()` as unexpected drift it didn't ask for, and generated a
+migration to strip them. This happened twice across the project's history
+(migrations `20260711075320` and `20260711171009`), each time breaking raw
+`pg` inserts (worker registration, job creation, user registration) with a
+null-constraint violation until manually patched back.
+
+**The permanent fix:** `schema.prisma` now declares these fields as
+`@default(dbgenerated("gen_random_uuid()"))` and
+`@default(dbgenerated("now()"))` instead. This tells Prisma the database-level
+default **is** the intended, desired state — not drift to correct — so future
+`prisma migrate dev` runs no longer see a diff on these columns and won't
+regenerate a migration that removes them. This is the standard, documented
+Prisma pattern for exactly this situation: a database-native default that
+Prisma's own generators can't express any other way.
+
+**Why this is worth documenting rather than hiding:** it's a genuine example of
+diagnosing a recurring bug to its actual root cause (a schema declaration
+mismatched with how the application really uses the database) rather than
+patching the symptom a third time.
