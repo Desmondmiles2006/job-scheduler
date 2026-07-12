@@ -32,7 +32,10 @@ const JOB_STATUS_MAP: Record<string, StatusPillProps["variant"]> = {
   CANCELLED: "neutral",
 };
 
+export function jobStatusVariant(status: string): StatusPillProps["variant"] {
+  return JOB_STATUS_MAP[status] ?? "neutral";
+}
+
 export function JobStatusPill({ status }: { status: string }) {
-  const variant = JOB_STATUS_MAP[status] ?? "neutral";
-  return <StatusPill label={status.toLowerCase().replace("_", " ")} variant={variant} />;
+  return <StatusPill label={status.toLowerCase().replace("_", " ")} variant={jobStatusVariant(status)} />;
 }

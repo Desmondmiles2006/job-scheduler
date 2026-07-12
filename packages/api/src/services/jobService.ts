@@ -16,6 +16,7 @@ export interface JobDto {
   maxAttempts: number;
   retryPolicyId: string | null;
   claimedBy: string | null;
+  lockedUntil: string | null;
   idempotencyKey: string | null;
   scheduledJobId: string | null;
   createdAt: string;
@@ -35,6 +36,7 @@ function toDto(row: any): JobDto {
     maxAttempts: row.max_attempts,
     retryPolicyId: row.retry_policy_id,
     claimedBy: row.claimed_by,
+    lockedUntil: row.locked_until,
     idempotencyKey: row.idempotency_key,
     scheduledJobId: row.scheduled_job_id,
     createdAt: row.created_at,

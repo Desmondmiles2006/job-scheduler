@@ -44,6 +44,7 @@ export interface Job {
   maxAttempts: number;
   retryPolicyId: string | null;
   claimedBy: string | null;
+  lockedUntil: string | null;
   idempotencyKey: string | null;
   scheduledJobId: string | null;
   createdAt: string;

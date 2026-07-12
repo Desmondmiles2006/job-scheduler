@@ -2,9 +2,50 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { JobStatusPill } from "../components/StatusPill";
+import { RunAtCountdown, LeaseCountdown } from "../components/Countdown";
 import { api } from "../api";
 import type { Job, JobExecution, JobLog } from "../api";
 import { ApiError } from "../api/client";
+
+const PIPELINE_STEPS = ["QUEUED", "SCHEDULED", "CLAIMED", "RUNNING", "COMPLETED"];
+
+function LifecycleStepLabel({ step, isCurrent }: { step: string; isCurrent: boolean }) {
+  if (isCurrent) return <JobStatusPill status={step} />;
+  return (
+    <span className="row-meta" style={{ color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+      {step.toLowerCase().replace("_", " ")}
+    </span>
+  );
+}
+
+function JobLifecycle({ status }: { status: string }) {
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <div className="nav-section-label" style={{ marginBottom: 16 }}>
+        Lifecycle
+      </div>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {PIPELINE_STEPS.map((step, i) => (
+          <div key={step} style={{ display: "flex", alignItems: "center", flex: i === PIPELINE_STEPS.length - 1 ? "0 0 auto" : 1 }}>
+            <LifecycleStepLabel step={step} isCurrent={step === status} />
+            {i < PIPELINE_STEPS.length - 1 && (
+              <div style={{ flex: 1, height: 1, background: "var(--border-strong)", margin: "0 12px" }} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
+        <span className="row-meta" style={{ color: "var(--text-faint)" }}>on failure:</span>
+        <LifecycleStepLabel step="FAILED" isCurrent={status === "FAILED"} />
+        <span className="row-meta" style={{ color: "var(--text-faint)" }}>→ retry ↻ back to scheduled, or once attempts are exhausted →</span>
+        <LifecycleStepLabel step="DEAD_LETTER" isCurrent={status === "DEAD_LETTER"} />
+        <span className="row-meta" style={{ color: "var(--text-faint)", marginLeft: 16 }}>or, if cancelled before it runs:</span>
+        <LifecycleStepLabel step="CANCELLED" isCurrent={status === "CANCELLED"} />
+      </div>
+    </div>
+  );
+}
 
 export function JobDetail() {
   const { projectId, queueId, jobId } = useParams<{ projectId: string; queueId: string; jobId: string }>();
@@ -71,7 +112,10 @@ export function JobDetail() {
         <div>
           <h1 className="page-title mono">{job.type}</h1>
           <p className="page-subtitle">
-            <JobStatusPill status={job.status} /> &nbsp; attempt {job.attempts}/{job.maxAttempts}
+            <JobStatusPill status={job.status} />{" "}
+            {(job.status === "QUEUED" || job.status === "SCHEDULED") && <RunAtCountdown runAt={job.runAt} />}
+            {(job.status === "CLAIMED" || job.status === "RUNNING") && <LeaseCountdown lockedUntil={job.lockedUntil} />}
+            &nbsp; attempt {job.attempts}/{job.maxAttempts}
           </p>
         </div>
         {cancellable && (
@@ -91,6 +135,8 @@ export function JobDetail() {
           {JSON.stringify(job.payload, null, 2)}
         </pre>
       </div>
+
+      <JobLifecycle status={job.status} />
 
       <div className="nav-section-label" style={{ marginBottom: 12 }}>
         Execution history

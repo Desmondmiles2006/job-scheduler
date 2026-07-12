@@ -3,6 +3,9 @@ import type { FormEvent } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { JobStatusPill, StatusPill } from "../components/StatusPill";
+import { RunAtCountdown, LeaseCountdown } from "../components/Countdown";
+import { simpleScheduleToCron } from "../lib/simpleSchedule";
+import type { SimpleScheduleUnit } from "../lib/simpleSchedule";
 import { api } from "../api";
 import type { Queue, Job, ScheduledJob, QueueStats } from "../api";
 import { ApiError } from "../api/client";
@@ -65,6 +68,9 @@ export function QueueDetail() {
   const [submittingJob, setSubmittingJob] = useState(false);
 
   const [cronName, setCronName] = useState("");
+  const [cronMode, setCronMode] = useState<"simple" | "advanced">("simple");
+  const [simpleInterval, setSimpleInterval] = useState<number | "">(5);
+  const [simpleUnit, setSimpleUnit] = useState<SimpleScheduleUnit>("minutes");
   const [cronExpr, setCronExpr] = useState("0 0 * * *");
   const [cronJobType, setCronJobType] = useState("");
   const [submittingCron, setSubmittingCron] = useState(false);
@@ -125,9 +131,19 @@ export function QueueDetail() {
     setError(null);
     setSubmittingCron(true);
     try {
+      let cronExpression: string;
+      if (cronMode === "simple") {
+        if (!simpleInterval || simpleInterval < 1) {
+          throw new Error("Interval must be a positive number");
+        }
+        cronExpression = simpleScheduleToCron(simpleInterval, simpleUnit);
+      } else {
+        cronExpression = cronExpr;
+      }
+
       await api.createScheduledJob(projectId, queueId, {
         name: cronName,
-        cronExpression: cronExpr,
+        cronExpression,
         jobType: cronJobType,
         payloadTemplate: {},
       });
@@ -252,7 +268,11 @@ export function QueueDetail() {
                   attempt {j.attempts}/{j.maxAttempts} · {new Date(j.createdAt).toLocaleString()}
                 </div>
               </div>
-              <JobStatusPill status={j.status} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {(j.status === "QUEUED" || j.status === "SCHEDULED") && <RunAtCountdown runAt={j.runAt} />}
+                {(j.status === "CLAIMED" || j.status === "RUNNING") && <LeaseCountdown lockedUntil={j.lockedUntil} />}
+                <JobStatusPill status={j.status} />
+              </div>
             </Link>
           ))}
         </div>
@@ -263,15 +283,55 @@ export function QueueDetail() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>Schedule</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className={`btn ${cronMode === "simple" ? "btn-primary" : ""}`}
+              onClick={() => setCronMode("simple")}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              className={`btn ${cronMode === "advanced" ? "btn-primary" : ""}`}
+              onClick={() => setCronMode("advanced")}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
         <form className="form-inline" onSubmit={handleCreateScheduledJob}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label htmlFor="cronName">Name</label>
             <input id="cronName" required value={cronName} onChange={(e) => setCronName(e.target.value)} />
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label htmlFor="cronExpr">Cron expression</label>
-            <input id="cronExpr" required value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} className="mono" style={{ width: 140 }} />
-          </div>
+          {cronMode === "simple" ? (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="simpleInterval">Every</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  id="simpleInterval"
+                  type="number"
+                  min={1}
+                  value={simpleInterval}
+                  onChange={(e) => setSimpleInterval(e.target.value ? Number(e.target.value) : "")}
+                  style={{ width: 70 }}
+                />
+                <select value={simpleUnit} onChange={(e) => setSimpleUnit(e.target.value as SimpleScheduleUnit)}>
+                  <option value="minutes">minutes</option>
+                  <option value="hours">hours</option>
+                  <option value="days">days</option>
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="cronExpr">Cron expression</label>
+              <input id="cronExpr" required value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} className="mono" style={{ width: 140 }} />
+            </div>
+          )}
           <div className="field" style={{ marginBottom: 0 }}>
             <label htmlFor="cronJobType">Job type</label>
             <input id="cronJobType" required value={cronJobType} onChange={(e) => setCronJobType(e.target.value)} />
