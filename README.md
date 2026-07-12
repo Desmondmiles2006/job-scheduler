@@ -63,11 +63,15 @@ This creates both `job_scheduler` and `job_scheduler_test` databases.
 
 **3. Copy environment files**
 ```bash
+cp packages/db/.env.example packages/db/.env
 cp packages/api/.env.example packages/api/.env
 cp packages/worker/.env.example packages/worker/.env
 cp packages/scheduler/.env.example packages/scheduler/.env
 ```
 On native Windows (no `cp`), use `copy` instead of `cp` in each line above.
+`packages/db/.env` is what `prisma migrate dev` reads `DATABASE_URL` from in
+the next step - it's easy to miss since it's a separate file from the other
+three.
 
 **4. Apply database migrations**
 ```bash
